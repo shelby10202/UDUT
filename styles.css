@@ -1,6 +1,6 @@
 /* Busca de ADs da EASA — visual sóbrio, inspirado em rea.tools: fonte do sistema, tons de tinta
-   sobre fundo branco (tema claro) ou paleta escura azulada, bordas finas de 1 px, raio de 5 px,
-   sem sombras, títulos com peso 650 e espaçamento negativo. */
+   sobre fundo branco (tema claro) ou preto (tema escuro), bordas finas de 1 px, raio de 5 px,
+   sem sombras, títulos com peso 650 e espaçamento negativo. Tema escuro em preto neutro. */
 :root {
   --ink: #20252b;
   --muted: #5b6570;
@@ -23,21 +23,21 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --ink: #cdd6f4;
-  --muted: #a6adc8;
-  --line: #45475a;
-  --soft: #181825;
-  --accent: #89b4fa;
-  --accent-soft: #313244;
-  --page: #1e1e2e;
-  --button-bg: #bac2de;
-  --button-bg-hover: #a6adc8;
-  --button-ink: #1e1e2e;
-  --warn: #f9e2af;
-  --warn-soft: #2f2a26;
-  --danger: #f38ba8;
-  --danger-soft: #33222b;
-  --ok: #a6e3a1;
+  --ink: #ededed;
+  --muted: #a1a1a1;
+  --line: #2a2a2a;
+  --soft: #111111;
+  --accent: #8ab4f8;
+  --accent-soft: #1c1c1c;
+  --page: #000000;
+  --button-bg: #ededed;
+  --button-bg-hover: #d4d4d4;
+  --button-ink: #000000;
+  --warn: #f5d38a;
+  --warn-soft: #1a1608;
+  --danger: #f28b82;
+  --danger-soft: #1f0d0c;
+  --ok: #81c995;
   color-scheme: dark;
 }
 
@@ -53,7 +53,7 @@ button, input { font: inherit; }
 a { color: var(--accent); text-underline-offset: 3px; }
 a:hover { text-decoration-thickness: 2px; }
 ::selection { background: #dce8f6; }
-:root[data-theme="dark"] ::selection { background: #45475a; }
+:root[data-theme="dark"] ::selection { background: #333333; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 [hidden] { display: none !important; }
 
@@ -186,7 +186,7 @@ h3 { margin: 0; font-size: 1.05rem; font-weight: 650; line-height: 1.14; letter-
 }
 /* ===== movimento ===================================================================== */
 :root { --ease-out: cubic-bezier(.2, .75, .2, 1); --glow-1: rgba(41, 79, 130, .16); --glow-2: rgba(120, 150, 210, .14); }
-:root[data-theme="dark"] { --glow-1: rgba(137, 180, 250, .16); --glow-2: rgba(203, 166, 247, .12); }
+:root[data-theme="dark"] { --glow-1: rgba(255, 255, 255, .07); --glow-2: rgba(138, 180, 248, .08); }
 
 @keyframes desce { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 @keyframes sobe { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
