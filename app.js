@@ -17,6 +17,7 @@ const el = {
 };
 let filtros = { numero: "", modelo: "", fabricante: "" };
 let pagina = 1, paginas = 1, sequencia = 0;
+const semMovimento = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---- tema claro/escuro (o tema-inicial.js já aplicou o salvo antes de pintar a página) -------
 function temaAtual() {
@@ -27,11 +28,26 @@ function atualizarBotaoTema() {
   el.tema.setAttribute("aria-label", escuro ? "Mudar para o tema claro" : "Mudar para o tema escuro");
   el.tema.title = escuro ? "Tema claro" : "Tema escuro";
 }
-el.tema.addEventListener("click", () => {
-  const novo = temaAtual() === "dark" ? "light" : "dark";
+function aplicarTema(novo) {
   document.documentElement.dataset.theme = novo;
   try { localStorage.setItem("tema", novo); } catch { /* sem armazenamento: vale só nesta visita */ }
   atualizarBotaoTema();
+}
+el.tema.addEventListener("click", () => {
+  const novo = temaAtual() === "dark" ? "light" : "dark";
+  el.tema.classList.remove("gira"); void el.tema.offsetWidth; el.tema.classList.add("gira");
+  if (!document.startViewTransition || semMovimento()) { aplicarTema(novo); return; }
+  // O tema novo "abre" num círculo a partir do botão.
+  const r = el.tema.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const raio = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  const transicao = document.startViewTransition(() => aplicarTema(novo));
+  transicao.ready.then(() => {
+    document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${raio}px at ${x}px ${y}px)`] },
+      { duration: 600, easing: "cubic-bezier(.2,.75,.2,1)", pseudoElement: "::view-transition-new(root)" }
+    );
+  }).catch(() => {});
 });
 atualizarBotaoTema();
 
@@ -67,8 +83,38 @@ function urlAppsScript(url) {
 const appsScriptUrl = urlAppsScript(APPS_SCRIPT_URL);
 
 // ---- render --------------------------------------------------------------------------------
-function cartao(item) {
+// Cartões "fantasma" com brilho enquanto a EASA responde.
+function esqueletos(n) {
+  return Array.from({ length: n }, (_, i) => {
+    const s = no("div", null, "registro esqueleto");
+    s.setAttribute("aria-hidden", "true");
+    s.style.setProperty("--i", String(i));
+    const a = no("div", null, "esq-col"), b = no("div", null, "esq-col");
+    a.append(no("span", null, "esq esq-titulo"), no("span", null, "esq esq-curto"), no("span", null, "esq esq-curto"));
+    b.append(no("span", null, "esq esq-titulo esq-largo"), no("span", null, "esq esq-linha"), no("span", null, "esq esq-linha esq-meio"));
+    s.append(a, b);
+    return s;
+  });
+}
+// Número que "conta" até o total.
+let contagemAnim = 0, ultimoTotal = 0;
+function contar(total, universo) {
+  const fim = Math.max(0, Number(total) || 0);
+  const texto = (n) => `${n.toLocaleString("pt-BR")} ${fim === 1 ? "diretriz encontrada" : "diretrizes encontradas"} de ${(Number(universo) || 0).toLocaleString("pt-BR")}`;
+  cancelAnimationFrame(contagemAnim);
+  const inicio = ultimoTotal; ultimoTotal = fim;
+  if (semMovimento() || inicio === fim) { el.count.textContent = texto(fim); return; }
+  const t0 = performance.now(), dur = 700;
+  const passo = (agora) => {
+    const p = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.count.textContent = texto(Math.round(inicio + (fim - inicio) * e));
+    if (p < 1) contagemAnim = requestAnimationFrame(passo);
+  };
+  contagemAnim = requestAnimationFrame(passo);
+}
+function cartao(item, indice = 0) {
   const rec = no("article", null, "registro");
+  rec.style.setProperty("--i", String(Math.min(indice, 12)));
   const correcao = /^\s*\[correction\]/i.test(String(item.assunto || ""));
   const id = no("div", null, "registro-id");
   id.append(no("h3", item.numero, "registro-numero"));
@@ -144,6 +190,8 @@ async function buscar(alvo = 1) {
   mostrarAviso("");
   el.count.textContent = "Consultando a EASA…";
   el.lista.setAttribute("aria-busy", "true");
+  el.lista.replaceChildren(...esqueletos(3));
+  el.vazio.hidden = true;
   el.prev.disabled = true; el.next.disabled = true; el.go.disabled = true;
   const lento = setTimeout(() => {
     if (atual === sequencia) el.count.textContent = "Consultando a EASA… a primeira consulta da hora baixa o arquivo histórico e pode levar até 1 minuto.";
@@ -167,9 +215,9 @@ async function buscar(alvo = 1) {
     }
     if (atual !== sequencia) return;
     pagina = Number(dados.pagina) || 1; paginas = Number(dados.paginas) || 1;
-    el.lista.replaceChildren(...dados.resultados.map(cartao));
+    el.lista.replaceChildren(...dados.resultados.map((item, i) => cartao(item, i)));
     const total = Number(dados.total) || 0;
-    el.count.textContent = `${total.toLocaleString("pt-BR")} ${total === 1 ? "diretriz encontrada" : "diretrizes encontradas"} de ${(Number(dados.totalEasa) || 0).toLocaleString("pt-BR")}`;
+    contar(total, dados.totalEasa);
     el.vazio.hidden = total !== 0;
     el.pager.hidden = paginas <= 1;
     el.pagina.textContent = `Página ${pagina} de ${paginas}`;
@@ -217,6 +265,17 @@ el.form.addEventListener("reset", () => {
 });
 el.prev.addEventListener("click", () => { buscar(pagina - 1); el.lista.scrollIntoView({ block: "start" }); });
 el.next.addEventListener("click", () => { buscar(pagina + 1); el.lista.scrollIntoView({ block: "start" }); });
+
+// ---- revelar ao rolar ----------------------------------------------------------------------
+(function revelarAoRolar() {
+  const alvos = [...document.querySelectorAll(".sources h2, .sources .card, .site-footer .footer-inner")];
+  alvos.forEach((a, i) => { a.classList.add("revelar"); a.style.setProperty("--i", String(a.classList.contains("card") ? i : 0)); });
+  if (!("IntersectionObserver" in window) || semMovimento()) { alvos.forEach((a) => a.classList.add("visivel")); return; }
+  const obs = new IntersectionObserver((entradas) => {
+    entradas.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("visivel"); obs.unobserve(e.target); } });
+  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+  alvos.forEach((a) => obs.observe(a));
+})();
 
 // ---- início --------------------------------------------------------------------------------
 // Filtros vindos do link (ex.: ?modelo=AS350) — dá para mandar uma busca pronta.

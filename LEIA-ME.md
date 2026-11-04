@@ -64,5 +64,8 @@ base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 - Links de documentos só para o próprio site da EASA. A página não grava nada nem usa cookies; só o
   tema escolhido fica salvo no navegador.
 - Dá para mandar uma busca pronta por link: `?modelo=AS350&fabricante=Safran`.
+- Animações de entrada (título palavra por palavra, painel e resultados em cascata, fundo com grade
+  e brilhos, seções que aparecem ao rolar, troca de tema em círculo). Quem ativou "reduzir
+  movimento" no sistema vê a página sem animação.
 
 Ferramenta de apoio: não substitui a verificação no site da EASA.
