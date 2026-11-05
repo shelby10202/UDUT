@@ -141,6 +141,8 @@ function cartao(item, indice = 0) {
     if (!href) return;
     const tipo = String((d && d.tipo) || "").toUpperCase().slice(0, 10);
     const a = no("a", `${tipo === "PDF" ? "Documento" : "Anexo"} ${tipo || "ARQUIVO"} ↗`, "text-link");
+    a.dataset.numero = String(item.numero || "").slice(0, 40);
+    a.dataset.tipo = tipo;
     a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer";
     a.title = String((d && d.nome) || "");
     a.setAttribute("aria-label", `${item.numero}: ${(d && d.nome) || "documento"} (abre o site da EASA)`);
@@ -185,7 +187,7 @@ function sincronizarUrl() {
   } catch { /* sem histórico: segue */ }
 }
 
-async function buscar(alvo = 1) {
+async function buscar(alvo = 1, origem = "form") {
   const atual = ++sequencia;
   mostrarAviso("");
   el.count.textContent = "Consultando a EASA…";
@@ -198,7 +200,8 @@ async function buscar(alvo = 1) {
   }, 6000);
   try {
     if (!appsScriptUrl) throw new Error("A busca ainda não está configurada: coloque a URL do App da Web (Apps Script) em config.js.");
-    const q = new URLSearchParams({ ...filtros, pagina: String(alvo) });
+    const q = new URLSearchParams({ ...filtros, pagina: String(alvo), sessao: uso.sessao, visitante: uso.visitante, origem });
+    uso.buscas += 1;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     let res;
@@ -256,15 +259,56 @@ el.form.addEventListener("submit", (event) => {
   el.msg.classList.toggle("is-erro", Boolean(erro));
   if (erro) return;
   filtros = rascunho;
-  buscar(1);
+  buscar(1, "form");
 });
 el.form.addEventListener("reset", () => {
   el.msg.textContent = ""; el.msg.classList.remove("is-erro");
   filtros = { numero: "", modelo: "", fabricante: "" };
-  setTimeout(() => buscar(1), 0);
+  setTimeout(() => buscar(1, "limpar"), 0);
 });
-el.prev.addEventListener("click", () => { buscar(pagina - 1); el.lista.scrollIntoView({ block: "start" }); });
-el.next.addEventListener("click", () => { buscar(pagina + 1); el.lista.scrollIntoView({ block: "start" }); });
+el.prev.addEventListener("click", () => { buscar(pagina - 1, "pagina"); el.lista.scrollIntoView({ block: "start" }); });
+el.next.addEventListener("click", () => { buscar(pagina + 1, "pagina"); el.lista.scrollIntoView({ block: "start" }); });
+
+// ---- indicadores de uso (painel do admin) ---------------------------------------------------
+// Sessão e visitante são códigos aleatórios do navegador: nenhum dado pessoal sai daqui. A busca é
+// registrada pelo próprio servidor; aqui só vão acesso, documento aberto e saída (tempo na página).
+function idAleatorio() {
+  const al = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const rnd = crypto.getRandomValues(new Uint8Array(20));
+  return Array.from(rnd, (b) => al[b % al.length]).join("");
+}
+function idGuardado(qual, chave) {
+  try {
+    const armazem = qual === "local" ? window.localStorage : window.sessionStorage;
+    const atual = armazem.getItem(chave);
+    if (atual && /^[A-Za-z0-9]{10,40}$/.test(atual)) return atual;
+    const novo = idAleatorio();
+    armazem.setItem(chave, novo);
+    return novo;
+  } catch { return idAleatorio(); }
+}
+const uso = { visitante: idGuardado("local", "busca_ad_visitante"), sessao: idGuardado("sessao", "busca_ad_sessao"), inicio: Date.now(), buscas: 0, saiu: false };
+function registrarEvento(tipo, extra = {}) {
+  if (!appsScriptUrl) return;
+  const q = new URLSearchParams({ acao: "evento", tipo, sessao: uso.sessao, visitante: uso.visitante, ...extra });
+  try {
+    fetch(`${appsScriptUrl}${appsScriptUrl.includes("?") ? "&" : "?"}${q}`, { method: "GET", mode: "no-cors", credentials: "omit", referrerPolicy: "no-referrer", keepalive: true }).catch(() => {});
+  } catch { /* indicador é opcional: nunca atrapalha a busca */ }
+}
+function registrarSaida() {
+  if (uso.saiu) return;
+  uso.saiu = true;
+  registrarEvento("saida", { segundos: String(Math.max(0, Math.min(86400, Math.round((Date.now() - uso.inicio) / 1000)))) });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") registrarSaida();
+  else if (uso.saiu) { uso.saiu = false; uso.inicio = Date.now(); }
+});
+window.addEventListener("pagehide", registrarSaida);
+el.lista.addEventListener("click", (event) => {
+  const a = event.target.closest && event.target.closest("a[data-numero]");
+  if (a) registrarEvento("documento", { numero: a.dataset.numero || "", tipoDoc: (a.dataset.tipo || "").slice(0, 10) });
+});
 
 // ---- revelar ao rolar ----------------------------------------------------------------------
 (function revelarAoRolar() {
@@ -286,4 +330,5 @@ try {
   if (Number.isInteger(p) && p > 1) pagina = p;
 } catch { /* sem parâmetros */ }
 if (validar(filtros)) filtros = { numero: "", modelo: "", fabricante: "" };
-buscar(pagina);
+registrarEvento("acesso", { origem: document.referrer ? "link" : "direto" });
+buscar(pagina, "inicial");
